@@ -1,0 +1,70 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>AI Factory</title><style>
+*{box-sizing:border-box}body{margin:0;background:#08111f;color:#e5edf7;font-family:system-ui,Arial,sans-serif}.wrap{max-width:1250px;margin:auto;padding:20px}.eyebrow{letter-spacing:2px;color:#38bdf8;font-size:12px}.head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}.badge{background:#18314a;border-radius:9px;padding:9px 14px}h1{margin:6px 0 12px;font-size:26px}h2{font-size:18px;margin:22px 0 12px}.controls{display:flex;flex-wrap:wrap;gap:9px;align-items:center;background:#12233a;padding:14px;border-radius:12px;margin:12px 0}button{background:#2563eb;border:0;border-radius:8px;padding:10px 14px;color:white;cursor:pointer;font-weight:700}button:hover{filter:brightness(1.2)}.speed{min-width:190px;flex:1}.seek{width:100%}input[type=range]{accent-color:#38bdf8}.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:10px}.stat{background:#15273e;border-radius:10px;padding:12px}.stat small{color:#9db2ca;display:block}.stat strong{font-size:22px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(225px,1fr));gap:12px}.machine{background:#14263d;border:1px solid #35516b;border-radius:14px;padding:14px}.machine .top{display:flex;justify-content:space-between}.machine svg{display:block;width:100%;height:108px}.track{height:9px;background:#34465c;border-radius:8px;overflow:hidden}.fill{height:100%;background:#38bdf8;width:0}.note{color:#9db2ca;font-size:12px}.conveyor{height:90px;border:2px solid #526985;border-radius:10px;position:relative;overflow:hidden;background:repeating-linear-gradient(90deg,#1d344d 0,#1d344d 29px,#304a65 30px,#304a65 34px)}.package{position:absolute;top:12px;padding:6px 10px;color:#09111f;border:1px solid white;border-radius:6px;font-weight:bold;font-size:12px;white-space:nowrap}.gantt{background:#102139;border-radius:12px;padding:12px;overflow-x:auto}.gantt svg{display:block;min-width:700px;width:100%}.foot{margin-top:18px;color:#a6b8ca;font-size:12px}
+</style><script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script></head><body><div class="wrap"><div class="head"><div><div class="eyebrow">DIGITAL FACTORY CONTROL CENTER</div><h1>🏭 AI FACTORY · SIMULADOR DE PRODUCCIÓN</h1></div><div id="status" class="badge">LISTA PARA INICIAR</div></div>
+<div class="controls"><label style="background:#18314a;padding:9px;border-radius:8px">📁 CARGAR EXCEL <input type="file" id="upload" accept=".xlsx,.xls" style="display:block;margin-top:5px;max-width:230px"></label><button id="play">▶ INICIAR</button><button id="pause">⏸ PAUSAR</button><button id="reset">↺ REINICIAR</button><button id="step">⏭ +1 UNIDAD</button><label class="speed">Velocidad: <b id="speedLabel">1.0</b> unidades/s<br><input id="speed" type="range" min="0.25" max="15" step="0.25" value="1" style="width:100%"></label></div><p id="message" role="status" style="color:#a5f3fc">Carga tu Excel (.xlsx) con una hoja Schedule. Los datos se procesan en este navegador.</p><input id="seek" class="seek" type="range" min="0" max="1" step="0.05" value="0"><div class="stats" id="stats"></div><h2>ÁREA DE PRODUCCIÓN</h2><div id="machines" class="grid"></div><h2>FLUJO DE PAQUETES</h2><div class="conveyor" id="conveyor"></div><h2>GANTT DINÁMICO</h2><div class="gantt" id="gantt"></div><p class="foot">El archivo Excel se procesa localmente en tu navegador y no se envía a un servidor. La duración de las operaciones proviene del Excel; cambiar la velocidad no cambia el Cmax. El flujo de paquetes es una representación visual, no transporte físico.</p></div>
+<script>
+let schedule=[{"job": "J1", "operation": 1, "machine": "M1", "start": 0, "finish": 8, "processingTime": 8}, {"job": "J2", "operation": 1, "machine": "M2", "start": 0, "finish": 7, "processingTime": 7}, {"job": "J4", "operation": 1, "machine": "M3", "start": 0, "finish": 5, "processingTime": 5}, {"job": "J5", "operation": 1, "machine": "M4", "start": 0, "finish": 7, "processingTime": 7}, {"job": "J3", "operation": 1, "machine": "M1", "start": 8, "finish": 14, "processingTime": 6}, {"job": "J1", "operation": 2, "machine": "M2", "start": 8, "finish": 12, "processingTime": 4}, {"job": "J4", "operation": 2, "machine": "M2", "start": 12, "finish": 21, "processingTime": 9}, {"job": "J2", "operation": 2, "machine": "M1", "start": 14, "finish": 19, "processingTime": 5}, {"job": "J3", "operation": 2, "machine": "M3", "start": 14, "finish": 22, "processingTime": 8}, {"job": "J5", "operation": 2, "machine": "M1", "start": 19, "finish": 25, "processingTime": 6}, {"job": "J2", "operation": 3, "machine": "M4", "start": 19, "finish": 23, "processingTime": 4}, {"job": "J3", "operation": 3, "machine": "M2", "start": 22, "finish": 27, "processingTime": 5}, {"job": "J1", "operation": 3, "machine": "M3", "start": 22, "finish": 28, "processingTime": 6}, {"job": "J4", "operation": 3, "machine": "M4", "start": 23, "finish": 29, "processingTime": 6}, {"job": "J5", "operation": 3, "machine": "M3", "start": 28, "finish": 32, "processingTime": 4}];
+let machines=[...new Set(schedule.map(x=>x.machine))].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+let jobs=[...new Set(schedule.map(x=>x.job))].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+const palette=['#38bdf8','#f59e0b','#a78bfa','#34d399','#fb7185','#facc15','#2dd4bf','#c084fc'];
+let colors=Object.fromEntries(jobs.map((j,i)=>[j,palette[i%palette.length]]));
+let cmax=Math.max(...schedule.map(x=>x.finish));let t=0,running=false,last=0,raf=null;
+const el=id=>document.getElementById(id);el('seek').max=cmax;
+function parseExcelRows(rows){
+  if(!Array.isArray(rows)||!rows.length)throw Error('La hoja Schedule está vacía.');
+  if(rows.length>5000)throw Error('El calendario supera el límite de 5000 operaciones.');
+  const required=['job','operation','machine','start','finish','processingTime'];
+  const keys=Object.keys(rows[0]);
+  const missing=required.filter(k=>!keys.some(v=>v.trim().toLowerCase()===k.toLowerCase()));
+  if(missing.length)throw Error('Faltan columnas: '+missing.join(', '));
+  const data=rows.map((r,i)=>{
+    const o=Object.fromEntries(Object.entries(r).map(([k,v])=>[k.trim().toLowerCase(),v]));
+    const job=String(o.job??'').trim(),machine=String(o.machine??'').trim();
+    const operation=Number(o.operation),start=Number(o.start),finish=Number(o.finish),processingTime=Number(o.processingtime);
+    if(!job||!machine||job.length>50||machine.length>50||!Number.isInteger(operation)||operation<1||![start,finish,processingTime].every(Number.isFinite)||start<0||finish<=start||Math.abs(finish-start-processingTime)>1e-5)throw Error('Datos inválidos en fila '+(i+2));
+    return {job,operation,machine,start,finish,processingTime};
+  });
+  const byMachine=new Map(),byJob=new Map(),keysSeen=new Set();
+  for(const o of data){
+    const key=o.job+'\u0000'+o.operation;
+    if(keysSeen.has(key))throw Error('Operación duplicada: '+o.job+' O'+o.operation);
+    keysSeen.add(key);
+    if(!byMachine.has(o.machine))byMachine.set(o.machine,[]);
+    byMachine.get(o.machine).push(o);
+    if(!byJob.has(o.job))byJob.set(o.job,[]);
+    byJob.get(o.job).push(o);
+  }
+  for(const [m,ops] of byMachine){ops.sort((a,b)=>a.start-b.start);for(let i=1;i<ops.length;i++)if(ops[i].start<ops[i-1].finish-1e-6)throw Error('Solapamiento en máquina '+m);}
+  for(const [j,ops] of byJob){ops.sort((a,b)=>a.operation-b.operation);for(let i=0;i<ops.length;i++){if(ops[i].operation!==i+1)throw Error('Secuencia de operaciones incompleta para '+j);if(i&&ops[i].start<ops[i-1].finish-1e-6)throw Error('Precedencia incumplida para '+j);}}
+  return data;
+}
+function loadSchedule(data,name){stop();schedule=data;machines=[...new Set(schedule.map(x=>x.machine))].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));jobs=[...new Set(schedule.map(x=>x.job))].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));colors=Object.fromEntries(jobs.map((j,i)=>[j,palette[i%palette.length]]));cmax=Math.max(...schedule.map(x=>x.finish));t=0;el('seek').max=cmax;el('seek').value=0;el('message').style.color='#a5f3fc';el('message').textContent='✓ '+name+' cargado: '+schedule.length+' operaciones, '+machines.length+' máquinas, Cmax = '+cmax;render();}
+el('upload').addEventListener('change',async e=>{
+  const file=e.target.files?.[0];if(!file)return;
+  try{
+    if(file.size>2*1024*1024)throw Error('Máximo permitido: 2 MB.');
+    if(!/\.(xlsx|xls)$/i.test(file.name))throw Error('Se requiere un archivo Excel.');
+    if(typeof XLSX==='undefined')throw Error('No se pudo cargar la biblioteca Excel. Comprueba tu conexión.');
+    const wb=XLSX.read(await file.arrayBuffer(),{type:'array',bookVBA:false,cellHTML:false});
+    const sheet=wb.Sheets['Schedule'];if(!sheet)throw Error('No existe una hoja llamada Schedule.');
+    const rows=XLSX.utils.sheet_to_json(sheet,{defval:null});
+    loadSchedule(parseExcelRows(rows),file.name);
+  }catch(err){stop();el('message').textContent='⚠ '+err.message;el('message').style.color='#fca5a5';}
+  finally{e.target.value='';}
+});
+function machineSVG(active,color,pct){return `<svg viewBox="0 0 210 105" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="steel" x2="1" y2="1"><stop stop-color="#5d7690"/><stop offset="1" stop-color="#233b55"/></linearGradient></defs><rect x="18" y="21" width="172" height="70" rx="10" fill="url(#steel)" stroke="#8da9c1" stroke-width="2"/><rect x="31" y="35" width="94" height="43" rx="5" fill="#0a1728" stroke="#839db3"/><rect x="38" y="43" width="79" height="27" rx="4" fill="${active?color:'#34475f'}" opacity=".8"/><path d="M64 35v43M91 35v43" stroke="#11253b" stroke-width="4"/><rect x="138" y="35" width="38" height="32" rx="5" fill="#0d2034"/><circle cx="157" cy="47" r="7" fill="${active?'#22c55e':'#94a3b8'}"/><rect x="145" y="59" width="24" height="4" rx="2" fill="#91a6b8"/><rect x="29" y="91" width="18" height="9" fill="#536b82"/><rect x="162" y="91" width="18" height="9" fill="#536b82"/><rect x="18" y="13" width="${172*pct}" height="5" rx="2" fill="${color}"/></svg>`}
+function render(){const active=schedule.filter(x=>x.start<=t+1e-9&&x.finish>t+1e-9),done=schedule.filter(x=>x.finish<=t+1e-9),pct=t/cmax*100;
+el('status').textContent=t>=cmax?'PRODUCCIÓN FINALIZADA':running?'EN EJECUCIÓN':'EN PAUSA / LISTA';
+el('stats').innerHTML=[['TIEMPO ACTUAL',t.toFixed(1)+' u.'],['Cmax DEL PLAN',cmax+' u.'],['FINALIZADAS',done.length+' / '+schedule.length],['EN PROCESO',active.length],['AVANCE TEMPORAL',pct.toFixed(1)+'%']].map(([k,v])=>`<div class="stat"><small>${k}</small><strong>${v}</strong></div>`).join('');
+el('machines').innerHTML=machines.map(m=>{const x=active.find(o=>o.machine===m),p=x?(t-x.start)/(x.finish-x.start):0,c=x?colors[x.job]:'#94a3b8',next=schedule.filter(o=>o.machine===m&&o.start>t).sort((a,b)=>a.start-b.start)[0];return `<div class="machine"><div class="top"><b>${m}</b><small>${x?'PROCESANDO':'LIBRE'}</small></div>${machineSVG(!!x,c,p)}<div>${x?`<b style="color:${c}">${x.job} · O${x.operation}</b> — ${(p*100).toFixed(0)}%`:'LIBRE / ESPERA'}</div><p class="note">${x?'Termina t='+x.finish+' · Restan '+(x.finish-t).toFixed(1)+' u.':next?'Próximo inicio t='+next.start:'Sin operaciones pendientes'}</p><div class="track"><div class="fill" style="width:${p*100}%;background:${c}"></div></div></div>`}).join('');
+el('conveyor').innerHTML=active.map((x,i)=>{let p=(t-x.start)/(x.finish-x.start);return `<div class="package" style="left:${Math.min(84,3+77*p)}%;top:${10+(i%2)*37}px;background:${colors[x.job]}">${x.job} → ${x.machine}</div>`}).join('');
+const left=80,w=850,rh=45,h=45+machines.length*rh;let svg=`<svg viewBox="0 0 970 ${h}" xmlns="http://www.w3.org/2000/svg">`;
+for(let n=0;n<=5;n++){let x=left+w*n/5;svg+=`<line x1="${x}" y1="24" x2="${x}" y2="${h-10}" stroke="#38506b" stroke-dasharray="4 5"/><text x="${x}" y="17" text-anchor="middle" fill="#b5c8d9" font-size="13">${(cmax*n/5).toFixed(1)}</text>`}
+machines.forEach((m,i)=>{let y=36+i*rh;svg+=`<text x="68" y="${y+20}" text-anchor="end" fill="white" font-size="15">${m}</text><rect x="${left}" y="${y}" width="${w}" height="30" rx="4" fill="#1e344e"/>`;schedule.filter(o=>o.machine===m).forEach(o=>{let x=left+w*o.start/cmax,full=w*(o.finish-o.start)/cmax,filled=w*Math.max(0,Math.min(t,o.finish)-o.start)/cmax;svg+=`<rect x="${x}" y="${y}" width="${full}" height="30" rx="3" fill="#354a64" stroke="${colors[o.job]}"/><rect x="${x}" y="${y}" width="${Math.max(0,filled)}" height="30" rx="3" fill="${colors[o.job]}"/>`;if(full>42)svg+=`<text x="${x+full/2}" y="${y+20}" text-anchor="middle" fill="white" font-size="12">${o.job}·${o.operation}</text>`})});let marker=left+w*t/cmax;svg+=`<line x1="${marker}" y1="22" x2="${marker}" y2="${h-10}" stroke="#fb7185" stroke-width="3"/></svg>`;el('gantt').innerHTML=svg;
+el('seek').value=t;el('speedLabel').textContent=Number(el('speed').value).toFixed(2)}
+function tick(now){if(!running)return;if(!last)last=now;const dt=Math.min(.25,(now-last)/1000);last=now;t=Math.min(cmax,t+dt*Number(el('speed').value));render();if(t>=cmax){running=false;raf=null;return}raf=requestAnimationFrame(tick)}
+function stop(){running=false;last=0;if(raf!==null)cancelAnimationFrame(raf);raf=null}
+el('play').onclick=()=>{if(running)return;if(t>=cmax)t=0;running=true;last=0;render();raf=requestAnimationFrame(tick)};
+el('pause').onclick=()=>{stop();render()};el('reset').onclick=()=>{stop();t=0;render()};el('step').onclick=()=>{stop();t=Math.min(cmax,t+1);render()};el('seek').oninput=e=>{t=Number(e.target.value);last=0;render()};el('speed').oninput=()=>{el('speedLabel').textContent=Number(el('speed').value).toFixed(2)};
+render();
+</script></body></html>
